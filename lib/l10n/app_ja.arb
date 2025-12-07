@@ -1,0 +1,16 @@
+{
+  "appTitle": "顔ぼかし",
+  "toggleBlurShape": "ぼかしの形を切り替え",
+  "toggleOutlines": "輪郭の表示/非表示",
+  "reset": "リセット",
+  "share": "共有",
+  "save": "保存",
+  "selectAll": "すべて選択",
+  "deselectAll": "選択をすべて解除",
+  "uploadPrompt": "写真をアップロードしてください。",
+  "openPhotoButton": "写真を開く",
+  "applyBlurButton": "ぼかしを実行",
+  "blurComplete": "ぼかし処理が完了しました。✨",
+  "saveSuccess": "ギャラリーに保存しました！✅",
+  "saveFailure": "保存に失敗しました 😢"
+}

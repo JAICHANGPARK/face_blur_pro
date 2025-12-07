@@ -1,0 +1,16 @@
+{
+  "appTitle": "얼굴 흐리게",
+  "toggleBlurShape": "블러 모양 변경",
+  "toggleOutlines": "윤곽선 보기/숨기기",
+  "reset": "초기화",
+  "share": "공유",
+  "save": "저장",
+  "selectAll": "전체 선택",
+  "deselectAll": "전체 선택 해제",
+  "uploadPrompt": "사진을 업로드해주세요.",
+  "openPhotoButton": "사진 열기",
+  "applyBlurButton": "블러 실행",
+  "blurComplete": "블러 처리가 완료되었습니다. ✨",
+  "saveSuccess": "갤러리에 저장되었습니다! ✅",
+  "saveFailure": "저장에 실패했습니다 😢"
+}

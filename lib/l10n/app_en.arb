@@ -1,0 +1,16 @@
+{
+  "appTitle": "Face Blur",
+  "toggleBlurShape": "Toggle Blur Shape",
+  "toggleOutlines": "Toggle Outlines",
+  "reset": "Reset",
+  "share": "Share",
+  "save": "Save",
+  "selectAll": "Select All",
+  "deselectAll": "Deselect All",
+  "uploadPrompt": "Please upload a photo.",
+  "openPhotoButton": "Open Photo",
+  "applyBlurButton": "Apply Blur",
+  "blurComplete": "Blur processing is complete. ✨",
+  "saveSuccess": "Saved to gallery! ✅",
+  "saveFailure": "Failed to save 😢"
+}

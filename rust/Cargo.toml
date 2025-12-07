@@ -1,0 +1,19 @@
+[package]
+name = "rust_lib_my_app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+
+[dependencies]
+flutter_rust_bridge = "=2.11.1"
+image = "0.25.9"
+rustface = "0.1"    # 얼굴 탐지 (SeetaFace 엔진 포팅)
+anyhow = "1.0"
+tract-onnx = "0.22.0"
+getrandom = { version = "0.2", features = ["js"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
