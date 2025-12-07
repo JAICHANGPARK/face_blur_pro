@@ -1,0 +1,31 @@
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png"
+  min_sdk_android: 21  # Android 5.0
+  
+  # iOS 설정
+  remove_alpha_ios: true  # iOS는 알파 채널을 지원하지 않음
+  
+  # macOS 설정
+  macos:
+    generate: true
+    image_path: "assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png"
+  
+  # Windows 설정
+  windows:
+    generate: true
+    image_path: "assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png"
+    icon_size: 256  # Windows 아이콘 크기
+  
+  # Linux 설정
+  linux:
+    generate: true
+    image_path: "assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png"
+  
+  # Web 설정
+  web:
+    generate: true
+    image_path: "assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png"
+    background_color: "#000000"
+    theme_color: "#ffffff"

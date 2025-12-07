@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -27,12 +28,19 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
   <title>Face Blur Pro</title>
   <link rel="manifest" href="manifest.json">
 </head>
+
 <body>
+  <!-- ONNX Runtime Web (version-RFB-640.onnx 모델 실행) -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort.min.js"></script>
+  <!-- Custom Face Blur Logic -->
+  <script defer src="face_blur_web.js"></script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>
