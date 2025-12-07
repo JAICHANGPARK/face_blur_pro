@@ -1,5 +1,9 @@
 # Face Blur Pro
 
+> 🤖 **Built with [Antigravity](https://blog.google/technology/google-deepmind/introducing-gemini-cli-antigravity/) + Gemini 3 Model** — This app was created using **Vibe Coding**, an AI-assisted development approach powered by Gemini 3.
+>
+> ☁️ **Google Cloud credits are provided for this project.** #AISprint
+
 Face Blur Pro is a cross-platform Flutter application designed to enhance privacy by detecting and blurring faces in images. It demonstrates a powerful hybrid architecture, leveraging on-device ML for mobile and a Rust-based backend for desktop performace.
 
 ## ✨ Key Features
