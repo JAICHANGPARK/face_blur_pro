@@ -4,7 +4,7 @@
 
 # Face Blur Pro
 
-> 🤖 **Built with [Antigravity](https://blog.google/technology/google-deepmind/introducing-gemini-cli-antigravity/) + Gemini 3 Model** — This app was created using **Vibe Coding**, an AI-assisted development approach powered by Gemini 3.
+> 🤖 **Built with [Antigravity](https://antigravity.google/) + Gemini 3 Model** — This app was created using **Vibe Coding**, an AI-assisted development approach powered by Gemini 3.
 >
 > ☁️ **Google Cloud credits are provided for this project.** #AISprint
 
