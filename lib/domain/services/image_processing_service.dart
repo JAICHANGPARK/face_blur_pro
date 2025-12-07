@@ -8,6 +8,7 @@ import 'package:flutter_exif_rotation/flutter_exif_rotation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:my_app/data/models/my_face.dart';
+import 'package:my_app/domain/services/web_face_service.dart';
 import 'package:my_app/src/rust/api/simple.dart';
 import 'dart:io' if (dart.library.html) 'package:my_app/web_io_stub.dart';
 import 'package:path_provider/path_provider.dart';
@@ -37,34 +38,79 @@ class ImageProcessingService {
       dynamic finalImageFile;
       Uint8List bytes;
 
-      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
-        finalImageFile = await FlutterExifRotation.rotateImage(path: imageFile.path);
+      if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS)) {
+        finalImageFile = await FlutterExifRotation.rotateImage(
+          path: imageFile.path,
+        );
         bytes = await finalImageFile.readAsBytes();
       } else {
         if (!kIsWeb) {
           finalImageFile = File(imageFile.path);
           bytes = await finalImageFile.readAsBytes();
         } else {
-          finalImageFile = File(''); // Dummy
+          finalImageFile = null;
           bytes = await imageFile.readAsBytes();
         }
       }
 
-      final decodedImage = await decodeImageFromList(bytes);
+      // 웹에서 디코딩 오류가 발생할 수 있으므로 try-catch로 감싸고
+      // instantiateImageCodec 대신 직접 ImmutableBuffer 사용
+      ui.Image decodedImage;
+      try {
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        decodedImage = frame.image;
+      } catch (e) {
+        debugPrint('Image decode error, trying fallback: $e');
+        // Fallback: ImmutableBuffer 사용
+        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+        final descriptor = await ui.ImageDescriptor.encoded(buffer);
+        final codec = await descriptor.instantiateCodec();
+        final frame = await codec.getNextFrame();
+        decodedImage = frame.image;
+      }
+
       List<MyFace> detectedFaces = [];
 
-      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+      if (kIsWeb) {
+        // Web: TensorFlow.js 기반 얼굴 감지
+        final webRects = await WebFaceService.detectFaces(bytes);
+        detectedFaces = webRects.map((r) => MyFace(r)).toList();
+      } else if (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS) {
+        // Mobile: ML Kit 기반 얼굴 감지
         final inputImage = InputImage.fromFilePath(finalImageFile.path);
-        final options = FaceDetectorOptions(performanceMode: FaceDetectorMode.accurate);
+        final options = FaceDetectorOptions(
+          performanceMode: FaceDetectorMode.accurate,
+        );
         final faceDetector = FaceDetector(options: options);
         final mlFaces = await faceDetector.processImage(inputImage);
         await faceDetector.close();
         detectedFaces = mlFaces.map((f) => MyFace(f.boundingBox)).toList();
       } else {
-        final modelData = await rootBundle.load('assets/models/version-RFB-640.onnx');
+        // Desktop: Rust ONNX 기반 얼굴 감지
+        final modelData = await rootBundle.load(
+          'assets/models/version-RFB-640.onnx',
+        );
         final modelBytes = modelData.buffer.asUint8List();
-        final rustRects = await detectFacesDesktop(imageBytes: bytes, modelBytes: modelBytes);
-        detectedFaces = rustRects.map((r) => MyFace(Rect.fromLTWH(r.x.toDouble(), r.y.toDouble(), r.w.toDouble(), r.h.toDouble()))).toList();
+        final rustRects = await detectFacesDesktop(
+          imageBytes: bytes,
+          modelBytes: modelBytes,
+        );
+        detectedFaces = rustRects
+            .map(
+              (r) => MyFace(
+                Rect.fromLTWH(
+                  r.x.toDouble(),
+                  r.y.toDouble(),
+                  r.w.toDouble(),
+                  r.h.toDouble(),
+                ),
+              ),
+            )
+            .toList();
       }
 
       return PickedImageResult(bytes, decodedImage, detectedFaces);
@@ -83,25 +129,37 @@ class ImageProcessingService {
     if (selectedIndices.isEmpty) return null;
 
     try {
-      List<BlurRect> rectsToSend = [];
+      final List<Rect> rectsToBlur = [];
       for (int index in selectedIndices) {
-        final face = faces[index];
-        rectsToSend.add(
-          BlurRect(
-            x: face.boundingBox.left.toInt(),
-            y: face.boundingBox.top.toInt(),
-            w: face.boundingBox.width.toInt(),
-            h: face.boundingBox.height.toInt(),
-          ),
-        );
+        rectsToBlur.add(faces[index].boundingBox);
       }
 
-      final newBytes = await blurMultipleFaces(
-        imageBytes: imageBytes,
-        rects: rectsToSend,
-        isCircle: blurShape == BlurShape.circle,
-      );
-      return newBytes;
+      if (kIsWeb) {
+        // Web: Canvas API 기반 블러 처리
+        return await WebFaceService.blurFaces(
+          imageBytes: imageBytes,
+          rects: rectsToBlur,
+          isCircle: blurShape == BlurShape.circle,
+        );
+      } else {
+        // Native: Rust 기반 블러 처리
+        final List<BlurRect> rectsToSend = rectsToBlur
+            .map(
+              (r) => BlurRect(
+                x: r.left.toInt(),
+                y: r.top.toInt(),
+                w: r.width.toInt(),
+                h: r.height.toInt(),
+              ),
+            )
+            .toList();
+
+        return await blurMultipleFaces(
+          imageBytes: imageBytes,
+          rects: rectsToSend,
+          isCircle: blurShape == BlurShape.circle,
+        );
+      }
     } catch (e) {
       debugPrint("Blur Error: $e");
       return null;
@@ -145,15 +203,24 @@ class ImageProcessingService {
 
     try {
       if (kIsWeb) {
-        final String fileName = 'face_blur_${DateTime.now().millisecondsSinceEpoch}.png';
-        final FileSaveLocation? result = await getSaveLocation(suggestedName: fileName);
+        final String fileName =
+            'face_blur_${DateTime.now().millisecondsSinceEpoch}.png';
+        final FileSaveLocation? result = await getSaveLocation(
+          suggestedName: fileName,
+        );
         if (result != null) {
-          final XFile textFile = XFile.fromData(imageBytes, mimeType: 'image/png', name: fileName);
+          final XFile textFile = XFile.fromData(
+            imageBytes,
+            mimeType: 'image/png',
+            name: fileName,
+          );
           await textFile.saveTo(result.path);
           return true;
         }
         return false;
-      } else if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+      } else if (!kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS)) {
         if (defaultTargetPlatform == TargetPlatform.android) {
           var status = await Permission.storage.status;
           if (!status.isGranted) await Permission.storage.request();
@@ -167,11 +234,18 @@ class ImageProcessingService {
         );
         return result.isSuccess == true;
       } else {
-        final String fileName = 'face_blur_${DateTime.now().millisecondsSinceEpoch}.png';
-        final FileSaveLocation? result = await getSaveLocation(suggestedName: fileName);
+        final String fileName =
+            'face_blur_${DateTime.now().millisecondsSinceEpoch}.png';
+        final FileSaveLocation? result = await getSaveLocation(
+          suggestedName: fileName,
+        );
         if (result != null) {
           final Uint8List fileData = Uint8List.fromList(imageBytes);
-          final XFile textFile = XFile.fromData(fileData, mimeType: 'image/png', name: fileName);
+          final XFile textFile = XFile.fromData(
+            fileData,
+            mimeType: 'image/png',
+            name: fileName,
+          );
           await textFile.saveTo(result.path);
           return true;
         }
