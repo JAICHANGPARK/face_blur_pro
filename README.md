@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon/Gemini_Generated_Image_mu23g9mu23g9mu23.png" alt="Face Blur Pro Logo" width="200"/>
+</p>
+
 # Face Blur Pro
 
 > 🤖 **Built with [Antigravity](https://blog.google/technology/google-deepmind/introducing-gemini-cli-antigravity/) + Gemini 3 Model** — This app was created using **Vibe Coding**, an AI-assisted development approach powered by Gemini 3.
