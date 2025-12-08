@@ -49,4 +49,31 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get saveFailure => '저장에 실패했습니다 😢';
+
+  @override
+  String get tutorialOpenPhoto => '여기를 눌러 갤러리에서 사진을 선택하세요';
+
+  @override
+  String get tutorialSelectFaces => '감지된 얼굴을 탭하여 블러 처리할 얼굴을 선택하세요';
+
+  @override
+  String get tutorialDrawMode => '그리기 모드로 수동으로 블러 영역을 추가할 수 있어요';
+
+  @override
+  String get tutorialBlurShape => '원형과 사각형 블러를 전환할 수 있어요';
+
+  @override
+  String get tutorialApplyBlur => '여기를 눌러 선택한 얼굴에 블러를 적용하세요';
+
+  @override
+  String get tutorialSave => '블러 처리된 이미지를 갤러리에 저장하세요';
+
+  @override
+  String get tutorialSkip => '건너뛰기';
+
+  @override
+  String get tutorialNext => '다음';
+
+  @override
+  String get tutorialFinish => '알겠어요!';
 }

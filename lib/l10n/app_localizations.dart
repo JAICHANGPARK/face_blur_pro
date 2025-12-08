@@ -183,6 +183,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to save 😢'**
   String get saveFailure;
+
+  /// No description provided for @tutorialOpenPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap here to select a photo from your gallery'**
+  String get tutorialOpenPhoto;
+
+  /// No description provided for @tutorialSelectFaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap on detected faces to select them for blurring'**
+  String get tutorialSelectFaces;
+
+  /// No description provided for @tutorialDrawMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Use drawing mode to manually add blur regions'**
+  String get tutorialDrawMode;
+
+  /// No description provided for @tutorialBlurShape.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch between circular and rectangular blur'**
+  String get tutorialBlurShape;
+
+  /// No description provided for @tutorialApplyBlur.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap here to apply blur to selected faces'**
+  String get tutorialApplyBlur;
+
+  /// No description provided for @tutorialSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save the blurred image to your gallery'**
+  String get tutorialSave;
+
+  /// No description provided for @tutorialSkip.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get tutorialSkip;
+
+  /// No description provided for @tutorialNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get tutorialNext;
+
+  /// No description provided for @tutorialFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it!'**
+  String get tutorialFinish;
 }
 
 class _AppLocalizationsDelegate

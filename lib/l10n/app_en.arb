@@ -12,5 +12,14 @@
   "applyBlurButton": "Apply Blur",
   "blurComplete": "Blur processing is complete. ✨",
   "saveSuccess": "Saved to gallery! ✅",
-  "saveFailure": "Failed to save 😢"
+  "saveFailure": "Failed to save 😢",
+  "tutorialOpenPhoto": "Tap here to select a photo from your gallery",
+  "tutorialSelectFaces": "Tap on detected faces to select them for blurring",
+  "tutorialDrawMode": "Use drawing mode to manually add blur regions",
+  "tutorialBlurShape": "Switch between circular and rectangular blur",
+  "tutorialApplyBlur": "Tap here to apply blur to selected faces",
+  "tutorialSave": "Save the blurred image to your gallery",
+  "tutorialSkip": "Skip",
+  "tutorialNext": "Next",
+  "tutorialFinish": "Got it!"
 }

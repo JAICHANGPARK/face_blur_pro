@@ -12,5 +12,14 @@
   "applyBlurButton": "ぼかしを実行",
   "blurComplete": "ぼかし処理が完了しました。✨",
   "saveSuccess": "ギャラリーに保存しました！✅",
-  "saveFailure": "保存に失敗しました 😢"
+  "saveFailure": "保存に失敗しました 😢",
+  "tutorialOpenPhoto": "ここをタップしてギャラリーから写真を選択します",
+  "tutorialSelectFaces": "検出された顔をタップして、ぼかし処理する顔を選択します",
+  "tutorialDrawMode": "描画モードで手動でぼかし範囲を追加できます",
+  "tutorialBlurShape": "円形と四角形のぼかしを切り替えることができます",
+  "tutorialApplyBlur": "ここをタップして選択した顔にぼかしを適用します",
+  "tutorialSave": "ぼかし処理された画像をギャラリーに保存します",
+  "tutorialSkip": "スキップ",
+  "tutorialNext": "次へ",
+  "tutorialFinish": "完了"
 }

@@ -5,10 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:my_app/data/models/my_face.dart';
 import 'package:my_app/domain/services/image_processing_service.dart';
+import 'package:my_app/domain/services/tutorial_service.dart';
 import 'package:my_app/presentation/home/widgets/face_box_painter.dart';
 import 'package:my_app/l10n/app_localizations.dart';
 
 import 'package:my_app/main.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,11 +48,216 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Rect? _currentDrawRect;
   double _currentScaleFactor = 1.0;
 
+  // Tutorial Keys
+  final GlobalKey _openPhotoKey = GlobalKey();
+  final GlobalKey _blurButtonKey = GlobalKey();
+  final GlobalKey _shapeButtonKey = GlobalKey();
+  final GlobalKey _drawingButtonKey = GlobalKey();
+  final GlobalKey _saveButtonKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
+
+    // 튜토리얼 확인 (화면 빌드 후 실행)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+  }
+
+  Future<void> _checkAndShowTutorial() async {
+    final bool isShown = await TutorialService.isTutorialShown();
+    if (!isShown && mounted) {
+      _showTutorial();
+    }
+  }
+
+  void _showTutorial() {
+    final localizations = AppLocalizations.of(context)!;
+
+    // 타겟 정의
+    List<TargetFocus> targets = [];
+
+    // 1. 사진 열기 버튼
+    targets.add(
+      TargetFocus(
+        identify: "openPhoto",
+        keyTarget: _openPhotoKey,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    localizations.tutorialOpenPhoto,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // 이미지가 아직 로드되지 않은 상태에서 튜토리얼을 시작하므로,
+    // 이미지가 로드된 후에 보여져야 할 요소들은
+    // 사용자가 이미지를 불러온 후에 추가적인 튜토리얼을 보여주거나,
+    // 설명만 하고 넘어가는 방식을 택해야 합니다.
+    // 여기서는 주요 기능의 위치를 미리 알려주는 방식으로 구성합니다.
+
+    // 2. 그리기 모드 버튼
+    // (초기 상태에서도 버튼은 보이지만 비활성화 되어 있을 수 있음.
+    // 하지만 UI 위치를 알려주는 것이 목적이므로 포함)
+    targets.add(
+      TargetFocus(
+        identify: "drawingMode",
+        keyTarget: _drawingButtonKey, // 그리기 버튼 키
+        alignSkip: Alignment.bottomLeft,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    localizations.tutorialDrawMode,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // 3. 블러 모양 변경 버튼
+    targets.add(
+      TargetFocus(
+        identify: "blurShape",
+        keyTarget: _shapeButtonKey,
+        alignSkip: Alignment.bottomLeft,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    localizations.tutorialBlurShape,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // 4. 블러 실행 버튼
+    targets.add(
+      TargetFocus(
+        identify: "applyBlur",
+        keyTarget: _blurButtonKey,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    localizations.tutorialApplyBlur,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    // 5. 저장 버튼
+    targets.add(
+      TargetFocus(
+        identify: "saveButton",
+        keyTarget: _saveButtonKey,
+        alignSkip: Alignment.bottomLeft,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    localizations.tutorialSave,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 20.0,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+
+    TutorialCoachMark(
+      targets: targets,
+      colorShadow: Colors.black,
+      textSkip: localizations.tutorialSkip,
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () {
+        TutorialService.setTutorialShown();
+      },
+      onClickTarget: (target) {
+        // 타겟 클릭 시 동작 (필요 시 구현)
+      },
+      onSkip: () {
+        TutorialService.setTutorialShown();
+        return true;
+      },
+      onClickOverlay: (target) {
+        // 오버레이 클릭 시 다음으로 넘어감 (기본값)
+      },
+    ).show(context: context);
   }
 
   @override
@@ -338,6 +545,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           if (hasImage) ...[
             IconButton(
+              key: _shapeButtonKey,
               icon: Icon(
                 _blurShape == BlurShape.circle
                     ? Icons.circle
@@ -373,6 +581,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
             // 그리기 모드 토글 버튼
             IconButton(
+              key: _drawingButtonKey,
               icon: Icon(
                 _isDrawingMode ? Icons.edit_off : Icons.edit,
                 color: _isDrawingMode ? Colors.purpleAccent : Colors.black,
@@ -397,6 +606,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
 
             IconButton(
+              key: _saveButtonKey,
               onPressed: _saveToGallery,
 
               icon: const Icon(Icons.save_alt, color: Colors.black),
@@ -609,6 +819,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
+                    key: _openPhotoKey,
                     onPressed: _isProcessing ? null : _pickAndDetect,
                     icon: const Icon(Icons.camera_alt),
                     label: Text(localizations.openPhotoButton),
@@ -649,6 +860,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                 Expanded(
                   child: ElevatedButton.icon(
+                    key: _blurButtonKey,
                     onPressed: (_isProcessing || _selectedIndices.isEmpty)
                         ? null
                         : _blurSelectedFaces,

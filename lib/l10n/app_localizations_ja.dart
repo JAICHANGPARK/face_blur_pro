@@ -49,4 +49,31 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get saveFailure => '保存に失敗しました 😢';
+
+  @override
+  String get tutorialOpenPhoto => 'ここをタップしてギャラリーから写真を選択します';
+
+  @override
+  String get tutorialSelectFaces => '検出された顔をタップして、ぼかし処理する顔を選択します';
+
+  @override
+  String get tutorialDrawMode => '描画モードで手動でぼかし範囲を追加できます';
+
+  @override
+  String get tutorialBlurShape => '円形と四角形のぼかしを切り替えることができます';
+
+  @override
+  String get tutorialApplyBlur => 'ここをタップして選択した顔にぼかしを適用します';
+
+  @override
+  String get tutorialSave => 'ぼかし処理された画像をギャラリーに保存します';
+
+  @override
+  String get tutorialSkip => 'スキップ';
+
+  @override
+  String get tutorialNext => '次へ';
+
+  @override
+  String get tutorialFinish => '完了';
 }
