@@ -1,6 +1,8 @@
 use flutter_rust_bridge::for_generated::anyhow;
 use flutter_rust_bridge::frb;
-use image::{load_from_memory, GenericImage, GenericImageView, ImageFormat, Pixel}; // Pixel, GenericImage 추가
+use image::{
+    DynamicImage, GenericImage, GenericImageView, ImageDecoder, ImageFormat, ImageReader,
+}; // GenericImage 추가
 use std::cmp::Ordering;
 use std::io::Cursor;
 use tract_onnx::prelude::*; // 정렬을 위해 추가
@@ -25,6 +27,19 @@ pub struct BlurRect {
     pub h: i32,
 }
 
+fn decode_image_with_orientation(image_bytes: &[u8]) -> anyhow::Result<DynamicImage> {
+    let reader = ImageReader::new(Cursor::new(image_bytes)).with_guessed_format()?;
+    let mut decoder = reader.into_decoder()?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+
+    let mut image = DynamicImage::from_decoder(decoder)?;
+    image.apply_orientation(orientation);
+
+    Ok(image)
+}
+
 // 이미지 바이트와 좌표(x,y,w,h)를 받아 해당 영역을 블러 처리
 pub fn blur_face_area(
     image_bytes: Vec<u8>,
@@ -34,7 +49,7 @@ pub fn blur_face_area(
     h: i32,
 ) -> anyhow::Result<Vec<u8>> {
     // 1. 이미지 로드
-    let mut img = load_from_memory(&image_bytes)?;
+    let mut img = decode_image_with_orientation(&image_bytes)?;
     let (img_w, img_h) = (img.width() as i32, img.height() as i32);
 
     // 2. 좌표 유효성 검사 (이미지 범위를 벗어나지 않도록)
@@ -105,7 +120,7 @@ pub fn detect_faces_desktop(
     image_bytes: Vec<u8>,
     model_bytes: Vec<u8>,
 ) -> anyhow::Result<Vec<BlurRect>> {
-    let img = load_from_memory(&image_bytes)?;
+    let img = decode_image_with_orientation(&image_bytes)?;
     let (orig_w, orig_h) = img.dimensions();
 
     // 1. 모델 입력 크기 변경 (320 -> 640, 240 -> 480)
@@ -302,7 +317,7 @@ pub fn blur_multiple_faces(
     rects: Vec<BlurRect>,
     is_circle: bool, // ✨ 모양 선택 파라미터 추가
 ) -> anyhow::Result<Vec<u8>> {
-    let mut img = load_from_memory(&image_bytes)?;
+    let mut img = decode_image_with_orientation(&image_bytes)?;
     let (img_w, img_h) = (img.width() as i32, img.height() as i32);
 
     for rect in rects {

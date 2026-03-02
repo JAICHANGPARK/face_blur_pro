@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -25,8 +26,25 @@ class PickedImageResult {
   PickedImageResult(this.bytes, this.decodedImage, this.faces);
 }
 
+enum EmojiMaskLayout { single, tiled }
+
 class ImageProcessingService {
   final ImagePicker _picker = ImagePicker();
+
+  Future<ui.Image> _decodeUiImage(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (e) {
+      debugPrint('Image decode error, trying fallback: $e');
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    }
+  }
 
   Future<PickedImageResult?> pickAndDetectFaces() async {
     final XFile? imageFile = await _picker.pickImage(
@@ -55,22 +73,7 @@ class ImageProcessingService {
         }
       }
 
-      // 웹에서 디코딩 오류가 발생할 수 있으므로 try-catch로 감싸고
-      // instantiateImageCodec 대신 직접 ImmutableBuffer 사용
-      ui.Image decodedImage;
-      try {
-        final codec = await ui.instantiateImageCodec(bytes);
-        final frame = await codec.getNextFrame();
-        decodedImage = frame.image;
-      } catch (e) {
-        debugPrint('Image decode error, trying fallback: $e');
-        // Fallback: ImmutableBuffer 사용
-        final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-        final descriptor = await ui.ImageDescriptor.encoded(buffer);
-        final codec = await descriptor.instantiateCodec();
-        final frame = await codec.getNextFrame();
-        decodedImage = frame.image;
-      }
+      final decodedImage = await _decodeUiImage(bytes);
 
       List<MyFace> detectedFaces = [];
 
@@ -162,6 +165,125 @@ class ImageProcessingService {
       }
     } catch (e) {
       debugPrint("Blur Error: $e");
+      return null;
+    }
+  }
+
+  Future<Uint8List?> emojiMaskSelectedFaces({
+    required Uint8List imageBytes,
+    required List<MyFace> faces,
+    required Set<int> selectedIndices,
+    required BlurShape blurShape,
+    required String emoji,
+    required double emojiScaleFactor,
+    required EmojiMaskLayout layout,
+    required bool randomizePerFace,
+    required List<String> emojiPool,
+  }) async {
+    if (selectedIndices.isEmpty) return null;
+    final normalizedEmoji = emoji.trim();
+    final normalizedPool = emojiPool
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (normalizedEmoji.isNotEmpty &&
+        !normalizedPool.contains(normalizedEmoji)) {
+      normalizedPool.add(normalizedEmoji);
+    }
+
+    if (!randomizePerFace && normalizedEmoji.isEmpty) return null;
+    if (randomizePerFace && normalizedPool.isEmpty) return null;
+
+    try {
+      final sourceImage = await _decodeUiImage(imageBytes);
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final paint = Paint();
+      final random = math.Random();
+
+      canvas.drawImage(sourceImage, Offset.zero, paint);
+
+      final textPainter = TextPainter(
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      );
+
+      for (final index in selectedIndices) {
+        if (index < 0 || index >= faces.length) continue;
+        final rect = faces[index].boundingBox;
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        final emojiForFace = randomizePerFace
+            ? normalizedPool[random.nextInt(normalizedPool.length)]
+            : normalizedEmoji;
+
+        canvas.save();
+        if (blurShape == BlurShape.circle) {
+          canvas.clipPath(Path()..addOval(rect));
+        } else {
+          canvas.clipRect(rect);
+        }
+
+        if (layout == EmojiMaskLayout.single) {
+          final fontSize = (rect.shortestSide * emojiScaleFactor).clamp(
+            18.0,
+            rect.longestSide * 1.4,
+          );
+          textPainter.text = TextSpan(
+            text: emojiForFace,
+            style: TextStyle(fontSize: fontSize, height: 1.0),
+          );
+          textPainter.layout();
+
+          final maxX = (sourceImage.width.toDouble() - textPainter.width).clamp(
+            0.0,
+            sourceImage.width.toDouble(),
+          );
+          final maxY = (sourceImage.height.toDouble() - textPainter.height)
+              .clamp(0.0, sourceImage.height.toDouble());
+
+          final offset = Offset(
+            (rect.center.dx - textPainter.width / 2).clamp(0.0, maxX),
+            (rect.center.dy - textPainter.height / 2).clamp(0.0, maxY),
+          );
+          textPainter.paint(canvas, offset);
+        } else {
+          final fontSize = (rect.shortestSide * emojiScaleFactor * 0.45).clamp(
+            16.0,
+            120.0,
+          );
+          textPainter.text = TextSpan(
+            text: emojiForFace,
+            style: TextStyle(fontSize: fontSize, height: 1.0),
+          );
+          textPainter.layout();
+
+          final stepX = (textPainter.width * 1.15).clamp(8.0, rect.width);
+          final stepY = (textPainter.height * 1.15).clamp(8.0, rect.height);
+
+          for (double y = rect.top; y <= rect.bottom + stepY; y += stepY) {
+            for (double x = rect.left; x <= rect.right + stepX; x += stepX) {
+              textPainter.paint(canvas, Offset(x, y));
+            }
+          }
+        }
+
+        canvas.restore();
+      }
+
+      final picture = recorder.endRecording();
+      final maskedImage = await picture.toImage(
+        sourceImage.width,
+        sourceImage.height,
+      );
+      final byteData = await maskedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      debugPrint("Emoji mask error: $e");
       return null;
     }
   }

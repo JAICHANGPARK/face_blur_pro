@@ -20,6 +20,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  static const List<String> _emojiPresets = <String>[
+    '😎',
+    '🤖',
+    '🕶️',
+    '🐱',
+    '⭐',
+    '🔥',
+    '🎉',
+    '❤️',
+  ];
+
   final ImageProcessingService _imageProcessingService =
       ImageProcessingService();
 
@@ -41,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _showOutlines = true;
 
   BlurShape _blurShape = BlurShape.rectangle;
+  bool _useEmojiMask = false;
+  String _maskEmoji = '😎';
+  double _emojiScaleFactor = 0.9;
+  EmojiMaskLayout _emojiMaskLayout = EmojiMaskLayout.single;
+  bool _randomEmojiPerFace = false;
 
   // 수동 그리기 모드
   bool _isDrawingMode = false;
@@ -331,15 +347,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     setState(() => _isProcessing = true);
 
-    final newBytes = await _imageProcessingService.blurSelectedFaces(
-      imageBytes: _currentBytes!,
-
-      faces: _faces,
-
-      selectedIndices: _selectedIndices,
-
-      blurShape: _blurShape,
-    );
+    final newBytes = _useEmojiMask
+        ? await _imageProcessingService.emojiMaskSelectedFaces(
+            imageBytes: _currentBytes!,
+            faces: _faces,
+            selectedIndices: _selectedIndices,
+            blurShape: _blurShape,
+            emoji: _maskEmoji,
+            emojiScaleFactor: _emojiScaleFactor,
+            layout: _emojiMaskLayout,
+            randomizePerFace: _randomEmojiPerFace,
+            emojiPool: _emojiPresets,
+          )
+        : await _imageProcessingService.blurSelectedFaces(
+            imageBytes: _currentBytes!,
+            faces: _faces,
+            selectedIndices: _selectedIndices,
+            blurShape: _blurShape,
+          );
 
     if (newBytes != null) {
       final newDecodedImage = await decodeImageFromList(newBytes);
@@ -355,11 +380,168 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.blurComplete)),
+        SnackBar(
+          content: Text(
+            _useEmojiMask
+                ? '이모지 마스킹이 완료되었습니다. ✨'
+                : AppLocalizations.of(context)!.blurComplete,
+          ),
+        ),
       );
     }
 
     setState(() => _isProcessing = false);
+  }
+
+  Future<void> _showEmojiMaskSettings() async {
+    final controller = TextEditingController(text: _maskEmoji);
+    double tempScale = _emojiScaleFactor;
+    String tempEmoji = _maskEmoji;
+    EmojiMaskLayout tempLayout = _emojiMaskLayout;
+    bool tempRandomize = _randomEmojiPerFace;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '이모지 마스킹 설정',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('배치 방식'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('중앙 1개'),
+                        selected: tempLayout == EmojiMaskLayout.single,
+                        onSelected: (_) {
+                          setModalState(() {
+                            tempLayout = EmojiMaskLayout.single;
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Text('타일 반복'),
+                        selected: tempLayout == EmojiMaskLayout.tiled,
+                        onSelected: (_) {
+                          setModalState(() {
+                            tempLayout = EmojiMaskLayout.tiled;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('영역별 랜덤 이모지'),
+                    value: tempRandomize,
+                    onChanged: (value) {
+                      setModalState(() {
+                        tempRandomize = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  const Text('이모지 후보'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _emojiPresets
+                        .map(
+                          (emoji) => ActionChip(
+                            label: Text(
+                              emoji,
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                            onPressed: () {
+                              controller.text = emoji;
+                              tempEmoji = emoji;
+                              setModalState(() {});
+                            },
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(
+                      labelText: '이모지',
+                      hintText: '예: 😎 (랜덤일 때도 후보에 포함)',
+                    ),
+                    onChanged: (value) {
+                      tempEmoji = value.trim();
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text('크기: ${(tempScale * 100).round()}%'),
+                  Slider(
+                    value: tempScale,
+                    min: 0.5,
+                    max: 1.6,
+                    divisions: 11,
+                    label: '${(tempScale * 100).round()}%',
+                    onChanged: (value) {
+                      setModalState(() {
+                        tempScale = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final nextEmoji = tempEmoji.isNotEmpty
+                            ? tempEmoji
+                            : controller.text.trim();
+                        if (nextEmoji.isNotEmpty) {
+                          setState(() {
+                            _maskEmoji = nextEmoji;
+                            _emojiScaleFactor = tempScale;
+                            _emojiMaskLayout = tempLayout;
+                            _randomEmojiPerFace = tempRandomize;
+                          });
+                        } else {
+                          setState(() {
+                            _emojiScaleFactor = tempScale;
+                            _emojiMaskLayout = tempLayout;
+                            _randomEmojiPerFace = tempRandomize;
+                          });
+                        }
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('적용'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
   }
 
   Future<void> _shareImage() async {
@@ -545,15 +727,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
           if (hasImage) ...[
             IconButton(
+              icon: Icon(
+                _useEmojiMask ? Icons.emoji_emotions : Icons.blur_on,
+                color: _useEmojiMask ? Colors.orangeAccent : Colors.black,
+              ),
+              onPressed: () {
+                setState(() {
+                  _useEmojiMask = !_useEmojiMask;
+                });
+              },
+              tooltip: _useEmojiMask ? '이모지 마스킹 모드' : '블러 모드',
+            ),
+            if (_useEmojiMask)
+              IconButton(
+                icon: Text(_maskEmoji, style: const TextStyle(fontSize: 20)),
+                onPressed: _showEmojiMaskSettings,
+                tooltip: '이모지 설정',
+              )
+            else
+              const SizedBox.shrink(),
+            IconButton(
               key: _shapeButtonKey,
               icon: Icon(
                 _blurShape == BlurShape.circle
                     ? Icons.circle
                     : Icons.crop_square,
-
-                color: Colors.black,
+                color: _useEmojiMask ? Colors.orangeAccent : Colors.black,
               ),
-
               onPressed: () {
                 setState(() {
                   _blurShape = _blurShape == BlurShape.circle
@@ -561,10 +761,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       : BlurShape.circle;
                 });
               },
-
-              tooltip: localizations.toggleBlurShape,
+              tooltip: _useEmojiMask
+                  ? '이모지 마스크 모양'
+                  : localizations.toggleBlurShape,
             ),
-
             IconButton(
               icon: Icon(
                 _showOutlines ? Icons.visibility : Icons.visibility_off,
@@ -573,7 +773,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
 
               onPressed: () {
-                setState(() => _showOutlines = !_showOutlines);
+                setState(() {
+                  _showOutlines = !_showOutlines;
+                });
               },
 
               tooltip: localizations.toggleOutlines,
@@ -864,13 +1066,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onPressed: (_isProcessing || _selectedIndices.isEmpty)
                         ? null
                         : _blurSelectedFaces,
-                    icon: const Icon(Icons.blur_on),
+                    icon: Icon(
+                      _useEmojiMask ? Icons.emoji_emotions : Icons.blur_on,
+                    ),
                     label: Text(
-                      "${localizations.applyBlurButton} (${_selectedIndices.length})",
+                      "${_useEmojiMask ? (_emojiMaskLayout == EmojiMaskLayout.tiled ? '타일 이모지 마스킹' : '이모지 마스킹') : localizations.applyBlurButton} (${_selectedIndices.length})",
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.blueAccent,
+                      backgroundColor: _useEmojiMask
+                          ? Colors.orangeAccent
+                          : Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
                   ),

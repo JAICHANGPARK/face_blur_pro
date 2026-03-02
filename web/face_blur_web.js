@@ -13,6 +13,45 @@ const IOU_THRESHOLD = 0.3;
 const CENTER_VARIANCE = 0.1;
 const SIZE_VARIANCE = 0.2;
 
+function getDataUrlFromBase64(base64ImageData) {
+    const prefix = base64ImageData.startsWith('/9j/')
+        ? 'data:image/jpeg;base64,'
+        : 'data:image/png;base64,';
+    return prefix + base64ImageData;
+}
+
+async function loadImageForProcessing(base64ImageData) {
+    const dataUrl = getDataUrlFromBase64(base64ImageData);
+
+    if (typeof createImageBitmap === 'function') {
+        try {
+            const response = await fetch(dataUrl);
+            const blob = await response.blob();
+            const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+            return {
+                source: bitmap,
+                dispose: () => bitmap.close()
+            };
+        } catch (error) {
+            console.warn('[FaceBlur] createImageBitmap failed, fallback to Image():', error);
+        }
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+
+    return {
+        source: img,
+        dispose: () => {}
+    };
+}
+
 /**
  * ONNX 모델 로드
  */
@@ -86,115 +125,105 @@ async function detectFacesWeb(base64ImageData) {
 
         await initFaceDetector();
 
-        // Base64를 Image로 변환
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
+        const { source: imageSource, dispose } = await loadImageForProcessing(base64ImageData);
+        try {
+            console.log('[FaceBlur] Image loaded:', imageSource.width, 'x', imageSource.height);
 
-        await new Promise((resolve, reject) => {
-            img.onload = () => {
-                console.log('[FaceBlur] Image loaded:', img.width, 'x', img.height);
-                resolve();
-            };
-            img.onerror = (e) => {
-                console.error('[FaceBlur] Image load error:', e);
-                reject(e);
-            };
-            const prefix = base64ImageData.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
-            img.src = prefix + base64ImageData;
-        });
+            const origW = imageSource.width;
+            const origH = imageSource.height;
 
-        const origW = img.width;
-        const origH = img.height;
+            // Canvas에 640x480으로 리사이즈
+            const canvas = document.createElement('canvas');
+            canvas.width = MODEL_INPUT_W;
+            canvas.height = MODEL_INPUT_H;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imageSource, 0, 0, MODEL_INPUT_W, MODEL_INPUT_H);
 
-        // Canvas에 640x480으로 리사이즈
-        const canvas = document.createElement('canvas');
-        canvas.width = MODEL_INPUT_W;
-        canvas.height = MODEL_INPUT_H;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, MODEL_INPUT_W, MODEL_INPUT_H);
+            // 이미지 데이터 추출
+            const imageData = ctx.getImageData(0, 0, MODEL_INPUT_W, MODEL_INPUT_H);
+            const pixels = imageData.data;
 
-        // 이미지 데이터 추출
-        const imageData = ctx.getImageData(0, 0, MODEL_INPUT_W, MODEL_INPUT_H);
-        const pixels = imageData.data;
+            // NCHW 형식으로 텐서 생성 (정규화: (val - 127) / 128)
+            const tensorData = new Float32Array(1 * 3 * MODEL_INPUT_H * MODEL_INPUT_W);
 
-        // NCHW 형식으로 텐서 생성 (정규화: (val - 127) / 128)
-        const tensorData = new Float32Array(1 * 3 * MODEL_INPUT_H * MODEL_INPUT_W);
+            for (let y = 0; y < MODEL_INPUT_H; y++) {
+                for (let x = 0; x < MODEL_INPUT_W; x++) {
+                    const pixelIdx = (y * MODEL_INPUT_W + x) * 4;
+                    const tensorIdx = y * MODEL_INPUT_W + x;
 
-        for (let y = 0; y < MODEL_INPUT_H; y++) {
-            for (let x = 0; x < MODEL_INPUT_W; x++) {
-                const pixelIdx = (y * MODEL_INPUT_W + x) * 4;
-                const tensorIdx = y * MODEL_INPUT_W + x;
-
-                // RGB 채널 (NCHW 형식)
-                tensorData[0 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 0] - 127.0) / 128.0;     // R
-                tensorData[1 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 1] - 127.0) / 128.0;     // G
-                tensorData[2 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 2] - 127.0) / 128.0;     // B
+                    // RGB 채널 (NCHW 형식)
+                    tensorData[0 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 0] - 127.0) / 128.0;     // R
+                    tensorData[1 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 1] - 127.0) / 128.0;     // G
+                    tensorData[2 * MODEL_INPUT_H * MODEL_INPUT_W + tensorIdx] = (pixels[pixelIdx + 2] - 127.0) / 128.0;     // B
+                }
             }
-        }
 
-        const inputTensor = new ort.Tensor('float32', tensorData, [1, 3, MODEL_INPUT_H, MODEL_INPUT_W]);
+            const inputTensor = new ort.Tensor('float32', tensorData, [1, 3, MODEL_INPUT_H, MODEL_INPUT_W]);
 
-        console.log('[FaceBlur] Running ONNX inference...');
-        const results = await session.run({ input: inputTensor });
+            console.log('[FaceBlur] Running ONNX inference...');
+            const results = await session.run({ input: inputTensor });
 
-        // 결과 추출 (confidences, boxes)
-        const outputNames = Object.keys(results);
-        console.log('[FaceBlur] Output names:', outputNames);
+            // 결과 추출 (confidences, boxes)
+            const outputNames = Object.keys(results);
+            console.log('[FaceBlur] Output names:', outputNames);
 
-        const confidences = results[outputNames[0]].data;  // [1, N, 2]
-        const boxes = results[outputNames[1]].data;        // [1, N, 4]
+            const confidences = results[outputNames[0]].data;  // [1, N, 2]
+            const boxes = results[outputNames[1]].data;        // [1, N, 4]
 
-        // 얼굴 감지
-        const detectedFaces = [];
+            // 얼굴 감지
+            const detectedFaces = [];
 
-        for (let i = 0; i < priors.length; i++) {
-            const score = confidences[i * 2 + 1];  // 얼굴 클래스 점수
+            for (let i = 0; i < priors.length; i++) {
+                const score = confidences[i * 2 + 1];  // 얼굴 클래스 점수
 
-            if (score > SCORE_THRESHOLD) {
-                const prior = priors[i];
+                if (score > SCORE_THRESHOLD) {
+                    const prior = priors[i];
 
-                const locCx = boxes[i * 4 + 0];
-                const locCy = boxes[i * 4 + 1];
-                const locW = boxes[i * 4 + 2];
-                const locH = boxes[i * 4 + 3];
+                    const locCx = boxes[i * 4 + 0];
+                    const locCy = boxes[i * 4 + 1];
+                    const locW = boxes[i * 4 + 2];
+                    const locH = boxes[i * 4 + 3];
 
-                const cx = prior.cx + locCx * CENTER_VARIANCE * prior.w;
-                const cy = prior.cy + locCy * CENTER_VARIANCE * prior.h;
-                const w = prior.w * Math.exp(locW * SIZE_VARIANCE);
-                const h = prior.h * Math.exp(locH * SIZE_VARIANCE);
+                    const cx = prior.cx + locCx * CENTER_VARIANCE * prior.w;
+                    const cy = prior.cy + locCy * CENTER_VARIANCE * prior.h;
+                    const w = prior.w * Math.exp(locW * SIZE_VARIANCE);
+                    const h = prior.h * Math.exp(locH * SIZE_VARIANCE);
 
-                const x = (cx - w / 2.0) * origW;
-                const y = (cy - h / 2.0) * origH;
-                const realW = w * origW;
-                const realH = h * origH;
+                    const x = (cx - w / 2.0) * origW;
+                    const y = (cy - h / 2.0) * origH;
+                    const realW = w * origW;
+                    const realH = h * origH;
 
-                detectedFaces.push({
-                    x1: x,
-                    y1: y,
-                    x2: x + realW,
-                    y2: y + realH,
-                    score: score
-                });
+                    detectedFaces.push({
+                        x1: x,
+                        y1: y,
+                        x2: x + realW,
+                        y2: y + realH,
+                        score: score
+                    });
+                }
             }
+
+            console.log('[FaceBlur] Before NMS:', detectedFaces.length, 'faces');
+
+            // Non-Maximum Suppression
+            const finalFaces = hardNms(detectedFaces, IOU_THRESHOLD);
+
+            console.log('[FaceBlur] After NMS:', finalFaces.length, 'faces');
+
+            // 결과 변환
+            const results_array = finalFaces.map(f => ({
+                x: Math.round(f.x1),
+                y: Math.round(f.y1),
+                width: Math.round(f.x2 - f.x1),
+                height: Math.round(f.y2 - f.y1)
+            }));
+
+            console.log('[FaceBlur] Detected', results_array.length, 'faces');
+            return JSON.stringify(results_array);
+        } finally {
+            dispose();
         }
-
-        console.log('[FaceBlur] Before NMS:', detectedFaces.length, 'faces');
-
-        // Non-Maximum Suppression
-        const finalFaces = hardNms(detectedFaces, IOU_THRESHOLD);
-
-        console.log('[FaceBlur] After NMS:', finalFaces.length, 'faces');
-
-        // 결과 변환
-        const results_array = finalFaces.map(f => ({
-            x: Math.round(f.x1),
-            y: Math.round(f.y1),
-            width: Math.round(f.x2 - f.x1),
-            height: Math.round(f.y2 - f.y1)
-        }));
-
-        console.log('[FaceBlur] Detected', results_array.length, 'faces');
-        return JSON.stringify(results_array);
 
     } catch (error) {
         console.error('[FaceBlur] Face detection error:', error);
@@ -252,29 +281,26 @@ async function blurFacesWeb(base64ImageData, rectsJson, isCircle) {
     try {
         const rects = JSON.parse(rectsJson);
 
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            const prefix = base64ImageData.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
-            img.src = prefix + base64ImageData;
-        });
+        const { source: imageSource, dispose } = await loadImageForProcessing(base64ImageData);
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = imageSource.width;
+            canvas.height = imageSource.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imageSource, 0, 0);
 
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+            for (const rect of rects) {
+                applyBlurToRegion(ctx, imageSource, rect, isCircle);
+            }
 
-        for (const rect of rects) {
-            applyBlurToRegion(ctx, img, rect, isCircle);
+            const dataUrl = canvas.toDataURL('image/png');
+            const base64Result = dataUrl.split(',')[1];
+
+            console.log('[FaceBlur] Blur applied successfully');
+            return base64Result;
+        } finally {
+            dispose();
         }
-
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64Result = dataUrl.split(',')[1];
-
-        console.log('[FaceBlur] Blur applied successfully');
-        return base64Result;
     } catch (error) {
         console.error('[FaceBlur] Blur error:', error);
         return base64ImageData;
@@ -284,7 +310,7 @@ async function blurFacesWeb(base64ImageData, rectsJson, isCircle) {
 /**
  * 특정 영역에 픽셀화 블러 적용
  */
-function applyBlurToRegion(ctx, img, rect, isCircle) {
+function applyBlurToRegion(ctx, imageSource, rect, isCircle) {
     const { x, y, width, height } = rect;
     const pixelSize = Math.max(8, Math.min(width, height) / 10);
 
@@ -292,7 +318,7 @@ function applyBlurToRegion(ctx, img, rect, isCircle) {
     tempCanvas.width = width;
     tempCanvas.height = height;
     const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(img, x, y, width, height, 0, 0, width, height);
+    tempCtx.drawImage(imageSource, x, y, width, height, 0, 0, width, height);
 
     const imageData = tempCtx.getImageData(0, 0, width, height);
     const data = imageData.data;
